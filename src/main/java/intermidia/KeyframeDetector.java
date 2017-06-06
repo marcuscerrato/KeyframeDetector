@@ -2,6 +2,7 @@ package intermidia;
 
 import java.io.File;
 import java.io.FileWriter;
+import java.util.ArrayList;
 
 import org.openimaj.feature.DoubleFVComparison;
 import org.openimaj.image.ImageUtilities;
@@ -12,16 +13,52 @@ import org.openimaj.video.xuggle.XuggleVideo;
 import TVSSUnits.Shot;
 import TVSSUnits.ShotList;
 import TVSSUtils.ShotReader;
+import TVSSUtils.VideoPinpointer;
 
 public class KeyframeDetector 
 {
+	private static class FrameInfo 
+	{
+		private int index;
+		private MultidimensionalHistogram histogram;
+		private double meanDistance;
+		
+		public int getIndex()
+		{
+			return this.index;
+		}
+		
+		public MultidimensionalHistogram getHistogram()
+		{
+			return this.histogram;
+		}
+		
+		public FrameInfo(int index, MultidimensionalHistogram histogram)
+		{
+			this.index = index;
+			this.histogram = histogram;
+		}
+		
+		public void setMeanDistance(double distance)
+		{
+			this.meanDistance = distance;		
+		}
+		
+		public double getMeanDistance()
+		{
+			return this.meanDistance;
+		}
+		
+	}
 	/*Usage: <in: video> <in: shot annotation> <out: keyframe annotation> <out: keyframe images>*/
     public static void main( String[] args ) throws Exception
     {
 		XuggleVideo source = new XuggleVideo(new File(args[0]));
+		XuggleVideo auxSource = new XuggleVideo(new File(args[0]));
 		//For some reason first two getNextFrame() returns 0.
 		source.getNextFrame();
-		ShotList shotList = ShotReader.readFromCSV(args[1]);					
+		ShotList shotList = ShotReader.readFromCSV(args[1]);
+		
 		
 		//System.out.println("Reading video.");		
 		FileWriter keyframeWriter = new FileWriter(args[2]);
@@ -30,59 +67,105 @@ public class KeyframeDetector
 		{	
 			int firstFrame = (int)shot.getStartBoundary();
 			int lastFrame = (int)shot.getEndBoundary();
-			long frameQty = (lastFrame - firstFrame + 1);						
+			ArrayList<FrameInfo> shotFrames = new ArrayList<FrameInfo>();
+			ArrayList<FrameInfo> shotKeyframes = new ArrayList<FrameInfo>();
+			
 			//Advance video pointer to the shot beginning
 			while(source.getCurrentFrameIndex() < firstFrame && source.hasNextFrame())
 			{
 				source.getNextFrame();
 			}
 			//Calculate a color histogram of each frame in the shot
-			int histIndex = 0;
-			MultidimensionalHistogram histogram[] = new MultidimensionalHistogram[(int) frameQty];			
+			int histIndex = 0;		
 			HistogramModel histogramModel = new HistogramModel(4,4,4);		
 			
 			while(source.getCurrentFrameIndex() <= lastFrame && 
 					source.hasNextFrame() &&
-					histIndex < frameQty
+					histIndex < (lastFrame - firstFrame + 1)
 				 )
 			{
 				histogramModel.estimateModel(source.getCurrentFrame());
-				histogram[histIndex++] = histogramModel.histogram.clone();
+				shotFrames.add(new FrameInfo(source.getCurrentFrameIndex(), histogramModel.histogram.clone()));				
 				source.getNextFrame();
 			}
-			//Sometimes there are less frames than the expected, this line updates it
-			frameQty = histIndex;
 			
 			//Calculate mean distance from a frame to all other in same shot
-			double meanDistance[] = new double[(int) frameQty];
-			for(int i = 0; i < frameQty; i++)
+			for(int i = 0; i < shotFrames.size(); i++)
 			{
-				meanDistance[i] = 0;
-				for(int j = 0; j < frameQty; j++)
+				double meanDistance = 0;
+				for(int j = 0; j < shotFrames.size(); j++)
 				{
-					meanDistance[i] += histogram[i].compare(histogram[j], DoubleFVComparison.EUCLIDEAN);
+					meanDistance += shotFrames.get(i).getHistogram().compare(shotFrames.get(j).getHistogram(), DoubleFVComparison.EUCLIDEAN);
 				}
-				meanDistance[i] /= frameQty;
+				meanDistance /= shotFrames.size();
+				shotFrames.get(i).setMeanDistance(meanDistance);
 			}
 			
-			int minDistanceIndex = 0;
-			double minDistance = meanDistance[minDistanceIndex];			
-			for(int i = 1; i < frameQty; i++)
+			
+			//Find first keyframe, one which is closest to all others in the shot.
+			FrameInfo lessDistantFrame = shotFrames.remove(0);
+			for(FrameInfo candidateFrame : shotFrames)
 			{
-				if(meanDistance[i] < minDistance)
+				if(lessDistantFrame.getMeanDistance() > candidateFrame.getMeanDistance())
 				{
-					minDistanceIndex = i;
-					minDistance = meanDistance[minDistanceIndex];
+					FrameInfo aux = lessDistantFrame;
+					lessDistantFrame = candidateFrame;
+					candidateFrame = aux;
 				}
 			}
-			keyframeWriter.write(shotIndex + "\t" + (firstFrame + minDistanceIndex) + "\n");
-			/*Create image file*/
-			String folder = args[3];
+			shotKeyframes.add(lessDistantFrame);								
+			//Old version of the justabove code
+			/*int minDistanceIndex = 0;
+			double minDistance = shotFrames.get(minDistanceIndex).getMeanDistance();			
+			for(int i = 1; i < shotFrames.size(); i++)
+			{
+				if(shotFrames.get(i).getMeanDistance() < minDistance)
+				{
+					minDistanceIndex = i;
+					minDistance = shotFrames.get(minDistanceIndex).getMeanDistance();
+				}
+			}			
+			shotKeyframes.add(shotFrames.remove(minDistanceIndex));*/
+			
+			
+			//Now find next keyframes, ones which are farthest from the all others in the keyframe list until a threshold is reached
+			//TODO Doing it only for one more keyframe...... must extend it.
+			for(FrameInfo candidateFrame : shotFrames)
+			{
+				double meanDistance = 0;
+				for(FrameInfo keyFrame : shotKeyframes)
+				{
+					meanDistance += candidateFrame.getHistogram().compare(keyFrame.getHistogram(), DoubleFVComparison.EUCLIDEAN);					
+				}
+				meanDistance /= shotKeyframes.size();
+				candidateFrame.setMeanDistance(meanDistance);
+			}	
+			
+			FrameInfo moreDistantFrame = shotFrames.remove(0);
+			for(FrameInfo candidateFrame : shotFrames)				
+			{
+				if(candidateFrame.getMeanDistance() > moreDistantFrame.getMeanDistance())
+				{
+					FrameInfo aux = moreDistantFrame;
+					moreDistantFrame = candidateFrame;
+					candidateFrame = aux;
+				}
+			}
+			shotKeyframes.add(moreDistantFrame);
+			
+			
 			int kfNum = 0;
-			String keyframeName = "s" + String.format("%04d", shotIndex) + "kf" + String.format("%04d", kfNum) + ".jpg";			
-			ImageUtilities.write(source.getCurrentFrame(), new File(folder + keyframeName));
-			//System.out.println("Shot " + shotIndex + ": " + shot.getStartBoundary() + " - " +  shot.getEndBoundary() +
-			//		" | Keyframe @ " + (firstFrame + minDistanceIndex));
+			for(FrameInfo keyframe : shotKeyframes)
+			{
+				keyframeWriter.write(shotIndex + "\t" + keyframe.getIndex() + "\n");
+				/*Create image file*/
+				String folder = args[3];
+				String keyframeName = "s" + String.format("%04d", shotIndex) + "kf" + String.format("%04d", kfNum++) + ".jpg";
+				VideoPinpointer.seek(auxSource, keyframe.getIndex());
+				ImageUtilities.write(auxSource.getCurrentFrame(), new File(folder + keyframeName));
+				System.out.println("Shot " + shotIndex + ": " + shot.getStartBoundary() + " - " +  shot.getEndBoundary() +
+						" | Keyframe @ " + keyframe.getIndex());
+			}
 			shotIndex++;
 		}		
 		source.close();
@@ -90,4 +173,6 @@ public class KeyframeDetector
 		System.exit(0); //Exit Success
     }
 }
+
+
  
