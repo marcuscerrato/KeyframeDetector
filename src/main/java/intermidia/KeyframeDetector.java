@@ -3,6 +3,7 @@ package intermidia;
 import java.io.File;
 import java.io.FileWriter;
 import java.util.ArrayList;
+import java.util.Comparator;
 
 import org.openimaj.feature.DoubleFVComparison;
 import org.openimaj.image.ImageUtilities;
@@ -17,7 +18,7 @@ import TVSSUtils.VideoPinpointer;
 
 public class KeyframeDetector 
 {
-	private static class FrameInfo 
+	private static class FrameInfo implements Comparable<FrameInfo>
 	{
 		private int index;
 		private MultidimensionalHistogram histogram;
@@ -48,11 +49,43 @@ public class KeyframeDetector
 		{
 			return this.meanDistance;
 		}
+
+		public int compareTo(FrameInfo otherFrameInfo) 
+		{
+			if(this.index == otherFrameInfo.index)
+			{
+				return 0;
+			}
+			else
+			{
+				if(this.index < otherFrameInfo.index)
+				{
+					return -1;
+				}
+				else
+				{
+					return 1;
+				}
+				
+			}
+		}
 		
 	}
+	private static class FrameInfoComparator implements Comparator<FrameInfo>
+	{
+		public int compare(FrameInfo firstFrameInfo, FrameInfo secondFrameInfo) 
+		{			
+			return firstFrameInfo.compareTo(secondFrameInfo);
+		}	 
+	}
+	
+	
+	
+	
 	/*Usage: <in: video> <in: shot annotation> <out: keyframe annotation> <out: keyframe images>*/
     public static void main( String[] args ) throws Exception
     {
+    	double stopThreshold = 0.7;
 		XuggleVideo source = new XuggleVideo(new File(args[0]));
 		XuggleVideo auxSource = new XuggleVideo(new File(args[0]));
 		//For some reason first two getNextFrame() returns 0.
@@ -113,48 +146,42 @@ public class KeyframeDetector
 					candidateFrame = aux;
 				}
 			}
-			shotKeyframes.add(lessDistantFrame);								
-			//Old version of the justabove code
-			/*int minDistanceIndex = 0;
-			double minDistance = shotFrames.get(minDistanceIndex).getMeanDistance();			
-			for(int i = 1; i < shotFrames.size(); i++)
-			{
-				if(shotFrames.get(i).getMeanDistance() < minDistance)
-				{
-					minDistanceIndex = i;
-					minDistance = shotFrames.get(minDistanceIndex).getMeanDistance();
-				}
-			}			
-			shotKeyframes.add(shotFrames.remove(minDistanceIndex));*/
+			shotKeyframes.add(lessDistantFrame);									
 			
-			
-			//Now find next keyframes, ones which are farthest from the all others in the keyframe list until a threshold is reached
-			//TODO Doing it only for one more keyframe...... must extend it.
-			for(FrameInfo candidateFrame : shotFrames)
+			//Now find next keyframes, ones which are farthest from the all others in the keyframe list until a threshold is reached			
+			double meanDistance = stopThreshold;
+			while(!shotFrames.isEmpty() && meanDistance >= stopThreshold)
 			{
-				double meanDistance = 0;
-				for(FrameInfo keyFrame : shotKeyframes)
+				for(FrameInfo candidateFrame : shotFrames)
 				{
-					meanDistance += candidateFrame.getHistogram().compare(keyFrame.getHistogram(), DoubleFVComparison.EUCLIDEAN);					
-				}
-				meanDistance /= shotKeyframes.size();
-				candidateFrame.setMeanDistance(meanDistance);
-			}	
+					meanDistance = 0;
+					for(FrameInfo keyFrame : shotKeyframes)
+					{
+						meanDistance += candidateFrame.getHistogram().compare(keyFrame.getHistogram(), DoubleFVComparison.EUCLIDEAN);					
+					}
+					meanDistance /= shotKeyframes.size();
+					candidateFrame.setMeanDistance(meanDistance);
+				}	
+				System.out.println("Mean dist: " + meanDistance);
 			
-			FrameInfo moreDistantFrame = shotFrames.remove(0);
-			for(FrameInfo candidateFrame : shotFrames)				
-			{
-				if(candidateFrame.getMeanDistance() > moreDistantFrame.getMeanDistance())
+				if(meanDistance >= stopThreshold)
 				{
-					FrameInfo aux = moreDistantFrame;
-					moreDistantFrame = candidateFrame;
-					candidateFrame = aux;
+					FrameInfo moreDistantFrame = shotFrames.remove(0);
+					for(FrameInfo candidateFrame : shotFrames)				
+					{
+						if(candidateFrame.getMeanDistance() > moreDistantFrame.getMeanDistance())
+						{
+							FrameInfo aux = moreDistantFrame;
+							moreDistantFrame = candidateFrame;
+							candidateFrame = aux;
+						}
+					}
+					shotKeyframes.add(moreDistantFrame);
 				}
 			}
-			shotKeyframes.add(moreDistantFrame);
-			
 			
 			int kfNum = 0;
+			shotKeyframes.sort(new FrameInfoComparator());
 			for(FrameInfo keyframe : shotKeyframes)
 			{
 				keyframeWriter.write(shotIndex + "\t" + keyframe.getIndex() + "\n");
