@@ -79,9 +79,7 @@ public class KeyframeDetector
 		}	 
 	}
 	
-	
-	
-	
+		
 	/*Usage: <in: video> <in: shot annotation> <out: keyframe annotation> <out: keyframe images>*/
     public static void main( String[] args ) throws Exception
     {
