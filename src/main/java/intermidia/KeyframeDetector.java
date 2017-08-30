@@ -80,10 +80,14 @@ public class KeyframeDetector
 	}
 	
 		
-	/*Usage: <in: video> <in: shot annotation> <out: keyframe annotation> <out: keyframe images>*/
+	/*Usage: <in: video> <in: shot annotation> <out: keyframe annotation> <out: keyframe images> <in (opt): similarity threshold>*/
     public static void main( String[] args ) throws Exception
     {
     	double stopThreshold = 0.7;
+    	if(args.length > 4)
+    	{
+    		stopThreshold = Float.parseFloat(args[4]);
+    	}
 		XuggleVideo source = new XuggleVideo(new File(args[0]));
 		XuggleVideo auxSource = new XuggleVideo(new File(args[0]));
 		//For some reason first two getNextFrame() returns 0.
@@ -160,7 +164,7 @@ public class KeyframeDetector
 					meanDistance /= shotKeyframes.size();
 					candidateFrame.setMeanDistance(meanDistance);
 				}	
-				System.out.println("Mean dist: " + meanDistance);
+				//System.out.println("Mean dist: " + meanDistance);
 			
 				if(meanDistance >= stopThreshold)
 				{
@@ -188,8 +192,8 @@ public class KeyframeDetector
 				String keyframeName = "s" + String.format("%04d", shotIndex) + "kf" + String.format("%04d", kfNum++) + ".jpg";
 				VideoPinpointer.seek(auxSource, keyframe.getIndex());
 				ImageUtilities.write(auxSource.getCurrentFrame(), new File(folder + keyframeName));
-				System.out.println("Shot " + shotIndex + ": " + shot.getStartBoundary() + " - " +  shot.getEndBoundary() +
-						" | Keyframe @ " + keyframe.getIndex());
+				//System.out.println("Shot " + shotIndex + ": " + shot.getStartBoundary() + " - " +  shot.getEndBoundary() +
+				//		" | Keyframe @ " + keyframe.getIndex());
 			}
 			shotIndex++;
 		}		
