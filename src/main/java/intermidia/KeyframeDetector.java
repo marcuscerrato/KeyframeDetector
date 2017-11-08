@@ -130,7 +130,7 @@ public class KeyframeDetector
 				double meanDistance = 0;
 				for(int j = 0; j < shotFrames.size(); j++)
 				{
-					meanDistance += shotFrames.get(i).getHistogram().compare(shotFrames.get(j).getHistogram(), DoubleFVComparison.EUCLIDEAN);
+					meanDistance += shotFrames.get(i).getHistogram().compare(shotFrames.get(j).getHistogram(), DoubleFVComparison.INTERSECTION);
 				}
 				meanDistance /= shotFrames.size();
 				shotFrames.get(i).setMeanDistance(meanDistance);
@@ -159,7 +159,7 @@ public class KeyframeDetector
 					meanDistance = 0;
 					for(FrameInfo keyFrame : shotKeyframes)
 					{
-						meanDistance += candidateFrame.getHistogram().compare(keyFrame.getHistogram(), DoubleFVComparison.EUCLIDEAN);					
+						meanDistance += candidateFrame.getHistogram().compare(keyFrame.getHistogram(), DoubleFVComparison.INTERSECTION);					
 					}
 					meanDistance /= shotKeyframes.size();
 					candidateFrame.setMeanDistance(meanDistance);
