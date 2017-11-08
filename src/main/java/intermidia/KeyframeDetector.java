@@ -14,7 +14,6 @@ import org.openimaj.video.xuggle.XuggleVideo;
 import TVSSUnits.Shot;
 import TVSSUnits.ShotList;
 import TVSSUtils.ShotReader;
-import TVSSUtils.VideoPinpointer;
 
 public class KeyframeDetector 
 {
@@ -80,24 +79,46 @@ public class KeyframeDetector
 	}
 	
 		
-	/*Usage: <in: video> <in: shot annotation> <out: keyframe annotation> <out: keyframe images> <in (opt): similarity threshold>*/
+	/*Usage: <in: video> <in: shot annotation> <out: keyframe annotation> <out: keyframe images> <in: similarity threshold> */
     public static void main( String[] args ) throws Exception
     {
-    	double stopThreshold = 0.6;
-    	if(args.length > 4)
-    	{
-    		stopThreshold = Float.parseFloat(args[4]);
-    	}
+    	double stopThreshold = Float.parseFloat(args[4]);
+    		
 		XuggleVideo source = new XuggleVideo(new File(args[0]));
 		XuggleVideo auxSource = new XuggleVideo(new File(args[0]));
 		//For some reason first two getNextFrame() returns 0.
-		source.getNextFrame();
+		source.getNextFrame();		
 		ShotList shotList = ShotReader.readFromCSV(args[1]);
 		
 		
 		//System.out.println("Reading video.");		
 		FileWriter keyframeWriter = new FileWriter(args[2]);
 		int shotIndex = 0;
+		///////////////////////////////////////FRAMEDEBUG START
+/*		for(Shot shot: shotList.getList())	
+		{
+			int firstFrame = (int)shot.getStartBoundary();
+			int lastFrame = (int)shot.getEndBoundary();
+			ArrayList<FrameInfo> shotFrames = new ArrayList<FrameInfo>();
+			ArrayList<FrameInfo> shotKeyframes = new ArrayList<FrameInfo>();
+			
+			//Advance video pointer to the shot beginning
+			while(source.getCurrentFrameIndex() < firstFrame && source.hasNextFrame())
+			{
+				source.getNextFrame();
+			}
+			ImageUtilities.write(source.getCurrentFrame(), new File("boundaries/"+String.format("%06d", source.getCurrentFrameIndex()) + ".jpg"));
+			
+			//Advance video pointer to the shot end
+			while(source.getCurrentFrameIndex() < lastFrame && source.hasNextFrame())
+			{
+				source.getNextFrame();
+			}
+			ImageUtilities.write(source.getCurrentFrame(), new File("boundaries/"+String.format("%06d", source.getCurrentFrameIndex()) + ".jpg"));
+			
+		}
+		System.exit(0);*/
+		///////////////////////////////////////FRAMEDEBUG END		
 		for(Shot shot: shotList.getList())	
 		{	
 			int firstFrame = (int)shot.getStartBoundary();
@@ -192,14 +213,20 @@ public class KeyframeDetector
 				/*Create image file*/
 				String folder = args[3];
 				String keyframeName = "s" + String.format("%04d", shotIndex) + "kf" + String.format("%04d", kfNum++) + ".jpg";
-				VideoPinpointer.seek(auxSource, keyframe.getIndex());
+				while(auxSource.getCurrentFrameIndex() < keyframe.getIndex())
+				{
+					auxSource.getNextFrame();
+				}
+				//VideoPinpointer.seek(auxSource, keyframe.getIndex());
+				
 				ImageUtilities.write(auxSource.getCurrentFrame(), new File(folder + keyframeName));
-				//System.out.println("Shot " + shotIndex + ": " + shot.getStartBoundary() + " - " +  shot.getEndBoundary() +
-				//		" | Keyframe @ " + keyframe.getIndex());
+				/*System.out.println("Shot " + shotIndex + ": " + shot.getStartBoundary() + " - " +  shot.getEndBoundary() +
+						" | Keyframe @ " + auxSource.getCurrentFrameIndex());*/
 			}
 			shotIndex++;
 		}		
 		source.close();
+		auxSource.close();
 		keyframeWriter.close();
 		System.exit(0); //Exit Success
     }
