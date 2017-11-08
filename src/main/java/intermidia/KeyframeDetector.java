@@ -83,7 +83,7 @@ public class KeyframeDetector
 	/*Usage: <in: video> <in: shot annotation> <out: keyframe annotation> <out: keyframe images> <in (opt): similarity threshold>*/
     public static void main( String[] args ) throws Exception
     {
-    	double stopThreshold = 0.7;
+    	double stopThreshold = 0.6;
     	if(args.length > 4)
     	{
     		stopThreshold = Float.parseFloat(args[4]);
@@ -130,7 +130,8 @@ public class KeyframeDetector
 				double meanDistance = 0;
 				for(int j = 0; j < shotFrames.size(); j++)
 				{
-					meanDistance += shotFrames.get(i).getHistogram().compare(shotFrames.get(j).getHistogram(), DoubleFVComparison.INTERSECTION);
+					// 1- similarity to obtain distance
+					meanDistance += (1 - shotFrames.get(i).getHistogram().compare(shotFrames.get(j).getHistogram(), DoubleFVComparison.INTERSECTION));
 				}
 				meanDistance /= shotFrames.size();
 				shotFrames.get(i).setMeanDistance(meanDistance);
@@ -159,7 +160,8 @@ public class KeyframeDetector
 					meanDistance = 0;
 					for(FrameInfo keyFrame : shotKeyframes)
 					{
-						meanDistance += candidateFrame.getHistogram().compare(keyFrame.getHistogram(), DoubleFVComparison.INTERSECTION);					
+						// 1- similarity to obtain distance
+						meanDistance += (1 - candidateFrame.getHistogram().compare(keyFrame.getHistogram(), DoubleFVComparison.INTERSECTION));					
 					}
 					meanDistance /= shotKeyframes.size();
 					candidateFrame.setMeanDistance(meanDistance);
