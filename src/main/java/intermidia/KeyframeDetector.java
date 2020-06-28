@@ -228,7 +228,7 @@ public class KeyframeDetector
 		source.close();
 		auxSource.close();
 		keyframeWriter.close();
-		System.exit(0); //Exit Success
+		//System.exit(0); //Exit Success
     }
 }
 
